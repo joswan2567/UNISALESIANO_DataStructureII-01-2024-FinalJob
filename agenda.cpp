@@ -9,6 +9,19 @@ using namespace std;
 using json = nlohmann::json;
 const char* format = "%Y-%m-%d %H:%M:%S";
 
+int resp, login_resp;
+string name, pass, passw, confirma, name_event,month, day, year, event_anotation;
+
+void login();
+void create_user();
+void logged();
+void delete_user();
+void show_events();
+void add_events();
+void delete_events();
+void byebye();
+void logged();
+
 /*
  * CLASSES
  */
@@ -142,12 +155,12 @@ bool USER_LoadAll(void)
             newUser.events.push_back(Event(event["name"], static_cast<event_repetions>(event["event_rep"]), event["date"]));
         }
 
-        cout << SETTINGS.toJson().dump(4);
+        //cout << SETTINGS.toJson().dump(4);
         
         SETTINGS.Users.push_back(newUser);
     }
     
-    cout << SETTINGS.toJson().dump(4);
+    //cout << SETTINGS.toJson().dump(4);
 
     return true;
 }
@@ -159,6 +172,17 @@ bool USER_Delete()
 
 bool USER_Save()
 {
+    for (int i = 0; i < SETTINGS.Users.size(); i++)
+    {
+	    //cout<< "Compare: " + user.name + " to " + username << endl;
+	    //cout<< "Compare: " + user.pass + " to " + password << endl;
+        if(SETTINGS.Users[i].name == SETTINGS.lastUser.name && SETTINGS.Users[i].pass == SETTINGS.lastUser.pass)
+        {
+            SETTINGS.Users[i] = SETTINGS.lastUser;            
+            break;
+        }
+    }
+
     ofstream file("settings.json");
     if (!file)
     {
@@ -172,8 +196,9 @@ bool USER_Save()
     return true;
 }
 
-bool USER_Add(User& user)
+bool USER_Add()
 {
+    User user;
     char opc = 'Y';
     cout << "Insert your name (Ex.: Zeh Linguiça): ";
     cin >> user.name;
@@ -199,6 +224,7 @@ bool USER_Add(User& user)
     }
 
     SETTINGS.Users.push_back(user);
+    USER_Save();
     return true;
 }
 
@@ -347,6 +373,8 @@ bool EVENT_Create(User& user)
     cout << "==> Event Added!" << endl;
     user.events.push_back(event);
 
+    USER_Save();
+
     return true;
 }
 
@@ -371,40 +399,220 @@ bool EVENT_Delete(User& user)
 
     user.events.erase(user.events.begin() + opc - 1);
 
+    USER_Save();
+
     cout << "==> Event deleted!" << endl;
 
     return true;
 }
 
+/*USER FUNCTIONS**********************************/
+//USER NOT LOGGED
+void create_user(){
+	cout<<("==========================================\n");
+	cout<<("WHAT'S YOUR NAME: ");
+	cin>>(name);
+	cout<<("WHAT'S PASSW (4 DIG): ");
+	cin>>(pass);
+	cout<<("\n");
+	cout<<("==========================================\n");				
+	}
+	
+	
+void delete_user(){
+	cout<<("==========================================\n");
+	cout<<("=====  -------- D-E-L-E-T-E -------- =====\n");
+	cout<<("==========================================\n");
+	cout<<("=========  THIS FUNCTION WILL    =========\n");
+	cout<<("=========  DELETE ALL EVENTS...  =========\n");
+	cout<<("=========  ARE YOU SURE? Y/N  =========\n");
+	cout<<("==========================================\n");
+	cout<<("TYPE Y FOR YES AND N FOR NO:");
+	cin>>confirma;
+	
+}
+
+bool User_GetUser(User &getUser, string username, string password)
+{
+    for (const auto& user : SETTINGS.Users)
+    {
+	    //cout<< "Compare: " + user.name + " to " + username << endl;
+	    //cout<< "Compare: " + user.pass + " to " + password << endl;
+        if(user.name == username && user.pass == password)
+        {
+            getUser = user;
+            return true;
+        }
+    }
+
+    return false;
+} 
+
+void login(){
+	cout<<("==========================================\n");
+	cout<<("WHAT'S YOUR NAME: ");
+	cin>>(name);
+	cout<<("WHAT'S PASSW (4 DIG): ");
+	cin>>(passw);
+	cout<<("\n");
+	cout<<("==========================================\n");
+
+    if(User_GetUser(SETTINGS.lastUser, name, passw))
+    {
+	    cout << "==> You are logged!" << endl;
+	    logged();
+    }
+    else
+    {
+	    cout << "==> Username or password incorrect!" << endl;
+    }
+}	
+
+//USER ACCOUNT
+
+//ESSA PARTE DEVE MOSTRAR TODOS AS TAREFAS ADICIONADAS NA LISTA
+void show_events(){
+
+}
+
+
+//ESSA PARTE DEVERA SER RESPONSAVEL POR ADICIONAR EVENTO 
+void add_events()
+{
+	cout<<("==========================================\n");
+	cout<<("EVENT NAME: ");
+	cin>>(name_event);
+	cout<<("\n");
+	cout<<("NOTES ABOUT EVENT:");
+	cin>>(event_anotation);
+	cout<<("\n");
+	cout<<("DATE: M/D/Y");
+	cin>>(month, day, year);
+	cout<<("==========================================\n");				
+}
+
+//ESSA PARTE DEVERA SER RESPONSAVEL POR DELETAR EVENTO 
+void delete_events()
+{
+	cout<<("==========================================\n");
+	cout<<("EVENT NAME: ");
+	cin>>(name_event);
+	cout<<("\n");
+}
+
+//ESSA PARTE DEVERA SER RESPONSAVEL POR DESCONECTAR-SE DA AGENDA 
+void byebye(){
+	printf("==> SEE YOU LATER ...\n");
+}
+
+
+void logged()
+{
+    bool disconnect = false;
+
+    while(!disconnect)
+    {
+        cout<<("==========================================\n");
+        cout<<("=====    Y-O-U-R--ARE--L-O-G-G-E-D   =====\n");
+        cout<<("==========================================\n");
+        cout<<("=========  1 - SHOW EVENTS:      =========\n");
+        cout<<("=========  2 - ADD EVENTS:       =========\n");
+        cout<<("=========  3 - DELETE EVENTS:    =========\n");
+        cout<<("==========================================\n");
+        cout<<("=========  4 - DISCONNECT:       =========\n");
+        cout<<("==========================================\n");
+        cout<<("\n");
+        cout<<(" WHAT'S YOUR CHOICE:");
+        cin>>(login_resp);
+
+        switch(login_resp){
+        case 1:
+            //show_events();
+            EVENT_PrintAll(SETTINGS.lastUser);
+            break;
+        case 2:
+            //add_events();
+            EVENT_Create(SETTINGS.lastUser);
+            break;
+        case 3: 
+            //delete_events();
+            EVENT_Delete(SETTINGS.lastUser);
+            break;
+        case 4:
+            byebye();
+            disconnect = true;
+            break;
+        }
+    }
+}
+
+void notLogged()
+{
+    bool close = false;
+
+    while(!close)
+    {
+        cout<<("==========================================\n");
+        cout<<("=====    Y-O-U-R--NOT--L-O-G-G-E-D   =====\n");
+        cout<<("==========================================\n");
+        cout<<("=========   1 - CREATE USER:     =========\n");
+        cout<<("=========   2 - DELETE USER:     =========\n");
+        cout<<("=========   3 - LOGIN:           =========\n");
+        cout<<("=========   4 - EXIT:           =========\n");
+        cout<<("==========================================\n");
+        cout<<("\n");
+        cout<<(" WHAT'S YOUR CHOICE:");
+        cin>>(resp);
+        
+        switch(resp){
+        case 1:
+            //create_user();
+            USER_Add();
+            break;
+        case 2:
+            delete_user();
+            break;
+        case 3: 
+            login();
+            break;
+        case 4:
+            byebye();
+            close = true;
+            break;
+        }
+    }
+}
 /*****************************************************************************************************************************/
 int main()
 {
     USER_LoadAll();
 
+    notLogged();
+
     /*** TESTE DE IMPLEMENTAÇÂO ***/
 
-    User user;
+    // User user;
 
-    user.name = "Jose";
-    user.pass = "123456789";
-    user.events.push_back(Event("Teste01", EVENT_REP_DAILY, 123465497));
-    user.events.push_back(Event("Teste02", EVENT_REP_DAILY, 123132465));
+    // user.name = "Jose";
+    // user.pass = "123456789";
+    // user.events.push_back(Event("Teste01", EVENT_REP_DAILY, 123465497));
+    // user.events.push_back(Event("Teste02", EVENT_REP_DAILY, 123132465));
 
-    SETTINGS.Users.push_back(user);
-    USER_Save();
+    // SETTINGS.Users.push_back(user);
+    // USER_Save();
 
-    user.name = "Pedro";
-    user.pass = "123456789";
-    user.events.push_back(Event("Teste03", EVENT_REP_DAILY, 14487));
-    user.events.push_back(Event("Teste04", EVENT_REP_DAILY, 154678984));
+    // user.name = "Pedro";
+    // user.pass = "123456789";
+    // user.events.push_back(Event("Teste03", EVENT_REP_DAILY, 14487));
+    // user.events.push_back(Event("Teste04", EVENT_REP_DAILY, 154678984));
 
-    SETTINGS.Users.push_back(user);
-    USER_Save();
+    // SETTINGS.Users.push_back(user);
+    // USER_Save();
 
-    EVENT_Create(user);
-    EVENT_Delete(user);
+    // EVENT_Create(user);
+    // EVENT_Delete(user);
 
-    USER_Save();
+    // USER_Save();
     /*** TESTE DE IMPLEMENTAÇÂO ***/
 
     return 0;
