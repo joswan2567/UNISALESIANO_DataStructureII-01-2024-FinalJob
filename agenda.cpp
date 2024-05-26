@@ -5,17 +5,17 @@
 #include <vector>
 #include <csignal>
 #include <nlohmann/json.hpp>
+#include <algorithm>
+#include <iterator>
 
 using namespace std;
 using json = nlohmann::json;
-const char* format = "%Y-%m-%d %H:%M:%S";
+//const char* format = "%Y-%m-%d %H:%M:%S";
+const char* format = "%d-%m-%Y %H:%M";
 bool isLogged = false;
 
-// int resp, login_resp;
-// string name, pass, passw, confirma, name_event,month, day, year, event_anotation;
-
 void USER_Login();
-void logged();
+void HEADER_Logged();
 void byebye();
 
 /*
@@ -269,112 +269,152 @@ bool SETTINGS_RemoveUser(User &rmvUser)
 
 void USER_Login()
 {
-    string name, pass;
-    cout << "\n====== Login ======\n\n";
-	cout<<("Insert username: ");
-	cin>>(name);
-	cout<<("Insert your password: ");
-	cin>>(pass);
-	cout<<("\n");
-	cout<<("==========================================\n");
-
-    if(User_GetUser(SETTINGS.lastUser, name, pass))
+    try
     {
-	    cout << "==> You are logged!" << endl;
-	    logged();
-    }
-    else
-    {
-	    cout << "==> Username or password incorrect!" << endl;
-    }
-}	
+        string name, pass;
+        cout << "\n====== Login ======\n\n";
+        cout<<("Insert username: ");
+        cin>>(name);
+        cout<<("Insert your password: ");
+        cin>>(pass);
+        cout<<("\n");
+        cout<<("==========================================\n");
 
+        if(User_GetUser(SETTINGS.lastUser, name, pass))
+        {
+            cout << "==> You are logged!" << endl;
+            HEADER_Logged();
+        }
+        else
+        {
+            cout << "==> Username or password incorrect!" << endl;
+        }
+    }
+    catch(const std::exception& e)
+    {
+        cout << "\n*** Err in USER_Login\n" << endl;
+        std::cerr << e.what() << '\n';
+    }
+}
 
 bool USER_Delete()
 {
-    User user;
-    string username, passwd;
-    cout << "\n====== User Delete ======\n\n";
-	cout<<("Insert username: ");
-	cin>>(username);
-    if(!USER_GetUserByUsername(user, username))
+    try
     {
-        cout << "\n*** User not founded!\n" << endl;
+        User user;
+        string username, passwd;
+        cout << "\n====== User Delete ======\n\n";
+        cout<<("Insert username: ");
+        cin>>(username);
+        if(!USER_GetUserByUsername(user, username))
+        {
+            cout << "\n*** User not founded!\n" << endl;
+            return false;
+        }
+        cout<< "User founded, When deleting the user, all registered events associated\nwith that user will be lost, continue?\nEnter this user's password to confirm the deletion: ";
+        cin>>(passwd);
+
+        if(user.pass == passwd)
+        {
+            if(SETTINGS_RemoveUser(user))
+            {
+                cout<< "\n==> User deleted with success!!\n " << endl;
+                return true;
+            }
+            cout<< "\n*** Err in delete user!!\n " << endl;
+        }
+        else
+        {
+            cout << "\n*** Password wrong! Is your '" + user.name + "'?\n" << endl;
+        }
         return false;
     }
-    cout<< "User founded, When deleting the user, all registered events associated\nwith that user will be lost, continue?\nEnter this user's password to confirm the deletion: ";
-    cin>>(passwd);
-
-    if(user.pass == passwd)
+    catch(const std::exception& e)
     {
-        if(SETTINGS_RemoveUser(user))
-        {
-            cout<< "\n==> User deleted with success!!\n " << endl;
-            return true;
-        }
-        cout<< "\n*** Err in delete user!!\n " << endl;
-    }
-    else
-    {
-        cout << "\n*** Password wrong! Is your '" + user.name + "'?\n" << endl;
+        cout << "\n*** Err in USER_Delete\n" << endl;
+        std::cerr << e.what() << '\n';
     }
     return false;
 }
 
 bool USER_Save()
 {
-    for (int i = 0; i < SETTINGS.Users.size(); i++)
+    try
     {
-	    //cout<< "Compare: " + SETTINGS.Users[i].name + " to " +  SETTINGS.lastUser.name << endl;
-	    //cout<< "Compare: " + SETTINGS.Users[i].pass + " to " +  SETTINGS.lastUser.pass << endl;
-        if(SETTINGS.Users[i].name == SETTINGS.lastUser.name && SETTINGS.Users[i].pass == SETTINGS.lastUser.pass)
+        for (int i = 0; i < SETTINGS.Users.size(); i++)
         {
-            //cout << "==> Saved with success!\n" << endl;
-            SETTINGS.Users[i] = SETTINGS.lastUser;            
-            SETTINGS_Save();
-            return true;
+            //cout<< "Compare: " + SETTINGS.Users[i].name + " to " +  SETTINGS.lastUser.name << endl;
+            //cout<< "Compare: " + SETTINGS.Users[i].pass + " to " +  SETTINGS.lastUser.pass << endl;
+            if(SETTINGS.Users[i].name == SETTINGS.lastUser.name && SETTINGS.Users[i].pass == SETTINGS.lastUser.pass)
+            {
+                //cout << "==> Saved with success!\n" << endl;
+                SETTINGS.Users[i] = SETTINGS.lastUser;            
+                SETTINGS_Save();
+                return true;
+            }
         }
-    }
 
-    cout << "\n ***Not save!\n" << endl;
+        cout << "\n ***Not save!\n" << endl;
+        return false;
+    }
+    catch(const std::exception& e)
+    {
+        cout << "\n*** Err in USER_Save\n" << endl;
+        std::cerr << e.what() << '\n';
+    }
     return false;
 }
 
 bool USER_Add()
 {
-    cout << "\n====== User Add ======\n\n";
-    User user;
-    char opc = 'Y';
-    cout << "Insert your name (Ex.: Zeh Linguiça): ";
-    cin >> user.name;
-
-    cout << "Insert your pass (Ex.: strongpass): ";
-    cin >> user.pass;
-
-    cout << "==> New user created!!" << endl;
-    SETTINGS.Users.push_back(user);
-    SETTINGS.lastUser = user;
-    USER_Save();
-
-    while (opc == 'Y' || opc == 'y')
+    try
     {
-        cout << "==> Do you like to add a new event? (y/n): ";
-        cin >> opc;
+        cout << "\n====== User Add ======\n\n";
+        User user, userCheck;
+        char opc = 'Y';
+        cout << "Insert your name (Ex.: Zeh Linguiça): ";
+        cin >> user.name;
 
-        if (opc == 'Y' || opc == 'y')
+        cout << "Insert your pass (Ex.: strongpass): ";
+        cin >> user.pass;
+
+        if(User_GetUser(userCheck, user.name, user.pass))
         {
-            EVENT_Create(SETTINGS.lastUser);
-            USER_Save();
+            cout << "\n*** Name and password invalid! insert other informations!\n" << endl;
+            return false;
         }
-        else if (opc == 'N' || opc == 'n')
+
+        cout << "==> New user created!!" << endl;
+        SETTINGS.Users.push_back(user);
+        SETTINGS.lastUser = user;
+        USER_Save();
+
+        while (opc == 'Y' || opc == 'y')
         {
-            break;
+            cout << "==> Do you like to add a new event? (y/n): ";
+            cin >> opc;
+
+            if (opc == 'Y' || opc == 'y')
+            {
+                EVENT_Create(SETTINGS.lastUser);
+                USER_Save();
+            }
+            else if (opc == 'N' || opc == 'n')
+            {
+                break;
+            }
         }
+
+        cout << "==> You are logged!" << endl;
+        HEADER_Logged();
+        return true;
     }
-
-    cout << "==> You are logged!" << endl;
-	logged();
-    return true;
+    catch(const std::exception& e)
+    {
+        cout << "\n*** Err in USER_Add\n" << endl;
+        std::cerr << e.what() << '\n';
+    }
+    return false;
 }
 
 /*****************************************************************************************************************************/
@@ -385,17 +425,25 @@ time_t parseDateTime(const string& datetimeString, const string& format)
 {
     struct tm tmStruct = {0};
 
-    if (sscanf(datetimeString.c_str(), "%d/%d/%d %d:%d:%d",
-               &tmStruct.tm_year,
-               &tmStruct.tm_mon,
+    if (sscanf(datetimeString.c_str(), "%d/%d/%d %d:%d",
                &tmStruct.tm_mday,
+               &tmStruct.tm_mon,
+               &tmStruct.tm_year,
                &tmStruct.tm_hour,
-               &tmStruct.tm_min,
-               &tmStruct.tm_sec) != 6)
+               &tmStruct.tm_min) != 5)
+    // if (sscanf(datetimeString.c_str(), "%d/%d/%d %d:%d:%d",
+    //            &tmStruct.tm_year,
+    //            &tmStruct.tm_mon,
+    //            &tmStruct.tm_mday,
+    //            &tmStruct.tm_hour,
+    //            &tmStruct.tm_min,
+    //            &tmStruct.tm_sec) != 6)
     {
-        cerr << "Erro ao analisar a data/hora." << endl;
+        cerr << "Erro ao analisar a data/hora. | [" + datetimeString + "]" << endl;
         return -1;
     }
+
+    tmStruct.tm_sec = 0;
 
     tmStruct.tm_year -= 1900;
     tmStruct.tm_mon -= 1;
@@ -430,26 +478,34 @@ string EVENT_GetRepStr(event_repetions eventRep)
 
 void EVENT_PrintAll(User& user)
 {
-    char opc;
-    cout << "\n====== All events ======\n\n";
-    cout << "==== " << user.name << "' events ====" << endl;
+    try
+    {    
+        char opc;
+        cout << "\n====== All events ======\n\n";
+        cout << "==== " << user.name << "' events ====" << endl;
 
-    if(user.events.size() == 0)
-    {
-        cout << "\n*** Not founded events! \n" << endl;
-        cout << "Do you like ad some?(Y/N): ";
-        cin >> opc;
-
-        if(opc == 'Y' || opc == 'y')
+        if(user.events.size() == 0)
         {
-            EVENT_Create(user);
-            return;
+            cout << "\n*** Not founded events! \n" << endl;
+            cout << "Do you like ad some?(Y/N): ";
+            cin >> opc;
+
+            if(opc == 'Y' || opc == 'y')
+            {
+                EVENT_Create(user);
+                return;
+            }
+        }
+
+        for (const Event& event : user.events)
+        {
+            EVENT_Print(event);
         }
     }
-
-    for (const Event& event : user.events)
+    catch(const exception& e)
     {
-        EVENT_Print(event);
+        cout << "\n*** Err in EVENT_PrintAll\n" << endl;
+        cerr << e.what() << '\n';
     }
 }
 
@@ -538,21 +594,24 @@ bool EVENT_CheckDate(int year, int month, int day)
 bool EVENT_IsDateValid(const string dateStr)
 {
     int year, month, day;
-    if (dateStr.size() != 10 || dateStr[4] != '/' || dateStr[7] != '/')
+    if (dateStr.size() != 10 || dateStr[2] != '/' || dateStr[5] != '/')
     {
         return false;
     }
     
     try
     {
-        year = stoi(dateStr.substr(0, 4));
-        month = stoi(dateStr.substr(5, 2));
-        day = stoi(dateStr.substr(8, 2));
+        day = stoi(dateStr.substr(0, 2));
+        month = stoi(dateStr.substr(3, 5));
+        year = stoi(dateStr.substr(6, 10));
+
+        //printf("%d | %d %d", day, month, year);
 
         return EVENT_CheckDate(year, month, day);
     } 
     catch (exception& e) 
     {
+        //printf("erro convert date");
         cout << e.what() << endl;
         return false;
     }
@@ -560,96 +619,130 @@ bool EVENT_IsDateValid(const string dateStr)
     return true;
 }
 
+bool EVENT_CheckOtherEventSameTime(Event evCheck, User user)
+{
+    for(const Event &event: user.events)
+    {
+        if(event.dateObj == evCheck.dateObj)
+        {
+            cout << "\n*** The event '" + event.name + "' is already scheduled at the same time!\n\n";
+            return true;
+        }
+    }
+
+    return false;
+}
 
 bool EVENT_Create(User& user)
 {
     char opc;
-    int opcEv, year, month, day;
+    int opcEv;
     Event event;
     string date, hour;
 
-    cout << "\n====== Create event ======\n\n";
-    cout << "Insert event's name (Ex.: Dog's birthday): ";
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-    getline(cin, event.name);
-    do
-    {        
-        cout << "Insert event's date (Frmt.: yyyy/mm/dd | Ex.: 2023/05/15): ";
-        cin >> date;
-
-        if(EVENT_IsDateValid(date))
-        {
-            break;
-        }
-        else
-        {
-            printf("\n*** Date not valid!\n");
-        }
-    } 
-    while (true);
-
-    do
-    {        
-        cout << "Insert event's hour (Frmt.: hh:mm | Ex.: 21:30): ";
-        cin >> hour;
-
-        if(EVENT_IsHourValid(hour))
-        {
-            break;
-        }
-        else
-        {
-            printf("\n*** Hour not valid!\n");
-        }
-    } 
-    while (true);
-
-    cout << "This event repeats? (Y/N): ";
-    cin >> opc;
-    if (opc == 'Y' || opc == 'y')
+    try
     {
-        cout << "How frequently?" << endl;
-        cout << "1 - Daily" << endl;
-        cout << "2 - Weekly" << endl;
-        cout << "3 - Monthly" << endl;
-        cout << "Input an option: ";
-        cin >> opcEv;
+        cout << "\n====== Create event ======\n\n";
+        cout << "Insert event's name (Ex.: Dog's birthday): ";
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        getline(cin, event.name);
 
-        switch (opcEv)
+        do
+        {        
+            do
+            {
+                //cout << "Insert event's date (Frmt.: yyyy/mm/dd | Ex.: 2023/05/15): ";
+                cout << "Insert event's date (Frmt.: dd/mm/yyyy | Ex.: 15/05/2023): ";
+                cin >> date;
+
+                if (!EVENT_IsDateValid(date))
+                {
+                    cout << "\n*** Date not valid!\n";
+                }
+            }
+            while (!EVENT_IsDateValid(date));
+
+            do
+            {
+                cout << "Insert event's hour (Frmt.: hh:mm | Ex.: 21:30): ";
+                cin >> hour;
+
+                if (!EVENT_IsHourValid(hour))
+                {
+                    cout << "\n*** Hour not valid!\n";
+                }
+            }
+            while (!EVENT_IsHourValid(hour));
+
+            date.append(" " + hour);
+            //date.append(" " + hour + ":00");
+            event.dateObj = parseDateTime(date, format);
+        } 
+        while (EVENT_CheckOtherEventSameTime(event, user));
+
+
+        cout << "This event repeats? (Y/N): ";
+        cin >> opc;
+        if (opc == 'Y' || opc == 'y')
         {
-        case 1:
-            event.event_rep = EVENT_REP_DAILY;
-            break;
-        case 2:
-            event.event_rep = EVENT_REP_WEEKLY;
-            break;
-        case 3:
-            event.event_rep = EVENT_REP_MONTHLY;
-            break;
-        default:
-            cout << "\n*** Invalid option! Setting not repeat for event.\n" << endl;
+            cout << "How frequently?" << endl;
+            cout << "1 - Daily" << endl;
+            cout << "2 - Weekly" << endl;
+            cout << "3 - Monthly" << endl;
+            cout << "Input an option: ";
+            cin >> opcEv;
+
+            switch (opcEv)
+            {
+            case 1:
+                event.event_rep = EVENT_REP_DAILY;
+                break;
+            case 2:
+                event.event_rep = EVENT_REP_WEEKLY;
+                break;
+            case 3:
+                event.event_rep = EVENT_REP_MONTHLY;
+                break;
+            default:
+                cout << "\n*** Invalid option! Setting not repeat for event.\n";
+                event.event_rep = EVENT_REP_NOT;
+                break;
+            }
+        }
+        else if (opc == 'N' || opc == 'n')
+        {
             event.event_rep = EVENT_REP_NOT;
-            break;
         }
+
+        cout << "Insert note about event (Ex.: Event in my house): ";
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        getline(cin, event.note);
+
+        // Verificar se o evento já existe
+        auto it = lower_bound(user.events.begin(), user.events.end(), event,
+                            [](const Event& e1, const Event& e2) {
+                                return e1.dateObj < e2.dateObj;
+                            });
+
+        if (it != user.events.end() && it->dateObj == event.dateObj)
+        {
+            cout << "\n*** Event already exists with the same information!\n";
+            return false;
+        }
+
+        // Inserir o novo evento de forma ordenada pelo campo dateObj
+        user.events.insert(it, event);
+
+        cout << "==> Event Added!\n";
+        USER_Save(); // Salvar o usuário após a adição do evento
+
+        return true;
     }
-    else if (opc == 'N' || opc == 'n')
-    {
-        event.event_rep = EVENT_REP_NOT;
+    catch(const std::exception& e)
+    {        
+        std::cerr << e.what() << '\n';
     }
-
-    cout << "Insert note about event (Ex.: Event in my house): ";
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-    getline(cin, event.note);
-
-    date.append(" " + hour + ":00");
-    event.dateObj = parseDateTime(date, format);
-
-    cout << "==> Event Added!" << endl;
-    user.events.push_back(event);
-
-    USER_Save();
-
-    return true;
+    return false;
 }
 
 bool EVENT_Delete(User& user)
@@ -657,35 +750,43 @@ bool EVENT_Delete(User& user)
     int opc;
     cout << "\n====== Delete event ======\n\n";
 
-    if(user.events.size() == 0)
+    try
     {
-        cout << "\n*** Not founded events! \n" << endl;
-        return false;
+        if(user.events.size() == 0)
+        {
+            cout << "\n*** Not founded events! \n" << endl;
+            return false;
+        }
+        
+        for (size_t i = 0; i < user.events.size(); ++i)
+        {
+            cout << i + 1 << ") ";
+            EVENT_Print(user.events[i]);
+            cout << endl;
+        }
+
+        cout << "Which event do you like to delete? (Ex.: 3): ";
+        cin >> opc;
+
+        if (opc < 1 || opc > user.events.size())
+        {
+            cout << "\n*** Invalid option!\n" << endl;
+            return false;
+        }
+
+        user.events.erase(user.events.begin() + opc - 1);
+
+        USER_Save();
+
+        cout << "==> Event deleted!" << endl;
+
+        return true;
     }
-    
-    for (size_t i = 0; i < user.events.size(); ++i)
+    catch(const std::exception& e)
     {
-        cout << i + 1 << ") ";
-        EVENT_Print(user.events[i]);
-        cout << endl;
+        std::cerr << e.what() << '\n';
     }
-
-    cout << "Which event do you like to delete? (Ex.: 3): ";
-    cin >> opc;
-
-    if (opc < 1 || opc > user.events.size())
-    {
-        cout << "\n*** Invalid option!\n" << endl;
-        return false;
-    }
-
-    user.events.erase(user.events.begin() + opc - 1);
-
-    USER_Save();
-
-    cout << "==> Event deleted!" << endl;
-
-    return true;
+    return false;
 }
 
 void byebye()
@@ -694,7 +795,57 @@ void byebye()
     exit(1);
 }
 
-void logged()
+
+void HEADER_NotLogged()
+{
+    bool close = false;
+    int opc;
+
+    while(!close)
+    {
+        try
+        {
+            cout<<("==========================================\n");
+            cout<<("=====    Welcome to MyEvents 1.0 !   =====\n");
+            cout<<("==========================================\n");
+            cout<<("=========   1 - Create user -    =========\n");
+            cout<<("=========   2 - Remove user -    =========\n");
+            cout<<("=========   3 -   Login     -    =========\n");
+            cout<<("=========   4 -   Exit:     -    =========\n");
+            cout<<("==========================================\n");
+            cout<<("\n");
+            cout<<("Do you like today?(Ex. 1):");
+            //opc = getc();
+            cin>>(opc);
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            
+            SETTINGS_ClearScreen();
+            switch(opc)
+            {
+                case 1:
+                    //create_user();
+                    USER_Add();
+                    break;
+                case 2:
+                    USER_Delete();
+                    break;
+                case 3: 
+                    USER_Login();
+                    break;
+                case 4:
+                    byebye();
+                    close = true;
+                    break;
+            }
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+    }
+}
+
+void HEADER_Logged()
 {
     bool disconnect = false;
     isLogged = true;
@@ -702,111 +853,54 @@ void logged()
 
     while(!disconnect)
     {
-        cout<<("==========================================\n");
-        cout<<("===== Welcome " + SETTINGS.lastUser.name +" to your notepad!\n");
-        cout<<("==========================================\n");
-        cout<<("=========  1 - See all events    =========\n");
-        cout<<("=========  2 - Add event         =========\n");
-        cout<<("=========  3 - Delete a event    =========\n");
-        cout<<("=========  4 - Logout            =========\n");
-        cout<<("==========================================\n");
-        cout<<("\n");
-        cout<<("Do you like to do?(Ex.: 2):");
-        cin>>(opc);
-
-        SETTINGS_ClearScreen();
-
-        switch(opc){
-        case 1:
-            //show_events();
-            EVENT_PrintAll(SETTINGS.lastUser);
-            break;
-        case 2:
-            //add_events();
-            EVENT_Create(SETTINGS.lastUser);
-            break;
-        case 3: 
-            //delete_events();
-            EVENT_Delete(SETTINGS.lastUser);
-            break;
-        case 4:
-            byebye();
-            isLogged = false;
-            disconnect = true;
-            break;
-        }
-    }
-}
-
-void notLogged()
-{
-    bool close = false;
-    int opc;
-
-    while(!close)
-    {
-        cout<<("==========================================\n");
-        cout<<("=====    Welcome to MyEvents 2.0 1!  =====\n");
-        cout<<("==========================================\n");
-        cout<<("=========   1 - Create user -    =========\n");
-        cout<<("=========   2 - Remove user -    =========\n");
-        cout<<("=========   3 -   Login     -    =========\n");
-        cout<<("=========   4 -   Exit:     -    =========\n");
-        cout<<("==========================================\n");
-        cout<<("\n");
-        cout<<("Do you like today?(Ex. 1):");
-        cin>>(opc);
-        
-        SETTINGS_ClearScreen();
-        switch(opc)
+        try
         {
+             cout<<("==========================================\n");
+            cout<<("===== Welcome " + SETTINGS.lastUser.name +" to your notepad!\n");
+            cout<<("==========================================\n");
+            cout<<("=========  1 - See all events    =========\n");
+            cout<<("=========  2 - Add event         =========\n");
+            cout<<("=========  3 - Delete a event    =========\n");
+            cout<<("=========  4 - Logout            =========\n");
+            cout<<("==========================================\n");
+            cout<<("\n");
+            cout<<("Do you like to do?(Ex.: 2):");
+            cin>>(opc);
+
+            SETTINGS_ClearScreen();
+
+            switch(opc){
             case 1:
-                //create_user();
-                USER_Add();
+                //show_events();
+                EVENT_PrintAll(SETTINGS.lastUser);
                 break;
             case 2:
-                USER_Delete();
+                //add_events();
+                EVENT_Create(SETTINGS.lastUser);
                 break;
             case 3: 
-                USER_Login();
+                //delete_events();
+                EVENT_Delete(SETTINGS.lastUser);
                 break;
             case 4:
-                byebye();
-                close = true;
+                //byebye();
+                cout << "\n==> See you later " + SETTINGS.lastUser.name + "...\n" << endl;
+                isLogged = false;
+                disconnect = true;
                 break;
+            }
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << e.what() << '\n';
         }
     }
+    HEADER_NotLogged();
 }
+
 void signalHandler(int signum)
 {
     std::cout << "\nISR (Ctrl+C). Function Exit..." << std::endl;
-
-    // if(isLogged)
-    // {
-    //     cout<<("==========================================\n");
-    //     cout<<("===== Welcome " + SETTINGS.lastUser.name +" to your notepad!\n");
-    //     cout<<("==========================================\n");
-    //     cout<<("=========  1 - See all events    =========\n");
-    //     cout<<("=========  2 - Add event         =========\n");
-    //     cout<<("=========  3 - Delete a event    =========\n");
-    //     cout<<("=========  4 - Logout            =========\n");
-    //     cout<<("==========================================\n");
-    //     cout<<("\n");
-    //     cout<<("Do you like to do?(Ex.: 2):");
-    // }
-    // else
-    // {
-    //     cout<<("==========================================\n");
-    //     cout<<("=====    Welcome to MyEvents 2.0 1!  =====\n");
-    //     cout<<("==========================================\n");
-    //     cout<<("=========   1 - Create user -    =========\n");
-    //     cout<<("=========   2 - Remove user -    =========\n");
-    //     cout<<("=========   3 -   Login     -    =========\n");
-    //     cout<<("=========   4 -   Exit:     -    =========\n");
-    //     cout<<("==========================================\n");
-    //     cout<<("\n");
-    //     cout<<("Do you like today?(Ex. 1):");
-    // }
 
     exit(1);
 }
@@ -817,33 +911,7 @@ int main()
 
     SETTINGS_LoadUsersAll();
 
-    notLogged();
-
-    /*** TESTE DE IMPLEMENTAÇÂO ***/
-
-    // User user;
-
-    // user.name = "Jose";
-    // user.pass = "123456789";
-    // user.events.push_back(Event("Teste01", EVENT_REP_DAILY, 123465497));
-    // user.events.push_back(Event("Teste02", EVENT_REP_DAILY, 123132465));
-
-    // SETTINGS.Users.push_back(user);
-    // USER_Save();
-
-    // user.name = "Pedro";
-    // user.pass = "123456789";
-    // user.events.push_back(Event("Teste03", EVENT_REP_DAILY, 14487));
-    // user.events.push_back(Event("Teste04", EVENT_REP_DAILY, 154678984));
-
-    // SETTINGS.Users.push_back(user);
-    // USER_Save();
-
-    // EVENT_Create(user);
-    // EVENT_Delete(user);
-
-    // USER_Save();
-    /*** TESTE DE IMPLEMENTAÇÂO ***/
+    HEADER_NotLogged();
 
     return 0;
 }
