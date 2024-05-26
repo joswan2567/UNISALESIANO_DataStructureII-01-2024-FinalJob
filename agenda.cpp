@@ -3,24 +3,20 @@
 #include <fstream>
 #include <ctime>
 #include <vector>
+#include <csignal>
 #include <nlohmann/json.hpp>
 
 using namespace std;
 using json = nlohmann::json;
 const char* format = "%Y-%m-%d %H:%M:%S";
+bool isLogged = false;
 
-int resp, login_resp;
-string name, pass, passw, confirma, name_event,month, day, year, event_anotation;
+// int resp, login_resp;
+// string name, pass, passw, confirma, name_event,month, day, year, event_anotation;
 
-void login();
-void create_user();
+void USER_Login();
 void logged();
-void delete_user();
-void show_events();
-void add_events();
-void delete_events();
 void byebye();
-void logged();
 
 /*
  * CLASSES
@@ -38,14 +34,16 @@ class Event
 {
 public:
     string name;
+    string note;
     time_t dateObj;
     event_repetions event_rep;
 
     Event() {}
 
-    Event(string n, event_repetions rep, time_t date)
+    Event(string n, string nt, event_repetions rep, time_t date)
     {
         name = n;
+        note = nt;
         event_rep = rep;
         dateObj = date;
     }
@@ -55,6 +53,7 @@ public:
         json j;
         j["name"] = name;
         j["date"] = dateObj;
+        j["note"] = note;
         j["event_rep"] = event_rep;
         return j;
     }
@@ -81,9 +80,16 @@ public:
         j["name"] = name;
         j["pass"] = pass;
 
-        for (const auto& event : events)
+        if(events.size() == 0)
         {
-            j["events"].push_back(event.toJson());
+            j["events"] = json::array();
+        }
+        else
+        {
+            for (const auto& event : events)
+            {
+                j["events"].push_back(event.toJson());
+            }
         }
         return j;
     }
@@ -105,10 +111,16 @@ public:
     json toJson() const
     {
         json j;
-
-        for (const auto& user : Users)
+        if(Users.size() == 0)
         {
-            j["users"].push_back(user.toJson());
+            j["users"] = json::array();
+        }
+        else
+        {
+            for (const auto& user : Users)
+            {
+                j["users"].push_back(user.toJson());
+            }
         }
         return j;
     }
@@ -120,12 +132,12 @@ public:
  */
 bool USER_Add(User& user);
 bool USER_Save(void);
-bool USER_LoadAll(void);
+bool SETTINGS_LoadUsersAll(void);
 
 bool EVENT_Create(User& user);
 bool EVENT_Delete(User& user);
 void EVENT_Print(Event event);
-void EVENT_PrintAll(User user);
+void EVENT_PrintAll(User &user);
 
 /*****************************************************************************************************************************/
 Settings SETTINGS;
@@ -133,12 +145,52 @@ Settings SETTINGS;
 /*
  * USERS FUNCTIONS
  */
-bool USER_LoadAll(void)
+void SETTINGS_ClearScreen() 
+{
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+}
+bool SETTINGS_Save()
+{
+    try
+    {
+        ofstream file("settings.json");
+        if (!file)
+        {
+            cerr << "\n*** Settings file not founded! \n" << endl;
+        }
+        else
+        {
+            //cout << " Saved this in file:" +  SETTINGS.toJson().dump(4);
+            file << SETTINGS.toJson().dump(4);
+            file.close();
+            return true;
+        }
+    }    
+    catch(const std::exception& e)
+    {
+        cout << "\nErr open settings file: ";
+        cout << e.what() << '\n' << endl;
+    }
+    
+    ofstream file("settings.json");
+    file << SETTINGS.toJson().dump(4);
+    file.close();
+
+    return false;
+}
+
+bool SETTINGS_LoadUsersAll(void)
 {
     ifstream file("settings.json");
     if (!file)
     {
-        cerr << "Erro ao abrir o arquivo settings.json" << endl;
+        cerr << "======================" << endl;
+        cerr << "Not founded user file!" << endl;
+        cerr << "======================" << endl;
         return false;
     }
 
@@ -152,7 +204,7 @@ bool USER_LoadAll(void)
 
         for (const auto& event : user["events"])
         {
-            newUser.events.push_back(Event(event["name"], static_cast<event_repetions>(event["event_rep"]), event["date"]));
+            newUser.events.push_back(Event(event["name"], event["note"], static_cast<event_repetions>(event["event_rep"]), event["date"]));
         }
 
         //cout << SETTINGS.toJson().dump(4);
@@ -165,8 +217,107 @@ bool USER_LoadAll(void)
     return true;
 }
 
+
+bool User_GetUser(User &getUser, string username, string password)
+{
+    for (const auto& user : SETTINGS.Users)
+    {
+	    //cout<< "Compare: " + user.name + " to " + username << endl;
+	    //cout<< "Compare: " + user.pass + " to " + password << endl;
+        if(user.name == username && user.pass == password)
+        {
+            getUser = user;
+            return true;
+        }
+    }
+
+    return false;
+} 
+
+bool USER_GetUserByUsername(User &getUser, string username)
+{
+    for (const auto& user : SETTINGS.Users)
+    {
+	    //cout<< "Compare: " + user.name + " to " + username << endl;
+	    //cout<< "Compare: " + user.pass + " to " + password << endl;
+        if(user.name == username)
+        {
+            getUser = user;
+            return true;
+        }
+    }
+
+    return false;
+} 
+
+bool SETTINGS_RemoveUser(User &rmvUser)
+{
+    for (int i = 0; SETTINGS.Users.size(); i++)
+    {
+	    //cout<< "Compare: " + user.name + " to " + username << endl;
+	    //cout<< "Compare: " + user.pass + " to " + password << endl;
+        if(SETTINGS.Users[i].name == rmvUser.name && SETTINGS.Users[i].pass == rmvUser.pass)
+        {
+            SETTINGS.Users.erase(SETTINGS.Users.begin() + i);
+            SETTINGS_Save();
+            return true;
+        }
+    }
+
+    return false;
+} 
+
+void USER_Login()
+{
+    string name, pass;
+    cout << "\n====== Login ======\n\n";
+	cout<<("Insert username: ");
+	cin>>(name);
+	cout<<("Insert your password: ");
+	cin>>(pass);
+	cout<<("\n");
+	cout<<("==========================================\n");
+
+    if(User_GetUser(SETTINGS.lastUser, name, pass))
+    {
+	    cout << "==> You are logged!" << endl;
+	    logged();
+    }
+    else
+    {
+	    cout << "==> Username or password incorrect!" << endl;
+    }
+}	
+
+
 bool USER_Delete()
 {
+    User user;
+    string username, passwd;
+    cout << "\n====== User Delete ======\n\n";
+	cout<<("Insert username: ");
+	cin>>(username);
+    if(!USER_GetUserByUsername(user, username))
+    {
+        cout << "\n*** User not founded!\n" << endl;
+        return false;
+    }
+    cout<< "User founded, When deleting the user, all registered events associated\nwith that user will be lost, continue?\nEnter this user's password to confirm the deletion: ";
+    cin>>(passwd);
+
+    if(user.pass == passwd)
+    {
+        if(SETTINGS_RemoveUser(user))
+        {
+            cout<< "\n==> User deleted with success!!\n " << endl;
+            return true;
+        }
+        cout<< "\n*** Err in delete user!!\n " << endl;
+    }
+    else
+    {
+        cout << "\n*** Password wrong! Is your '" + user.name + "'?\n" << endl;
+    }
     return false;
 }
 
@@ -174,30 +325,24 @@ bool USER_Save()
 {
     for (int i = 0; i < SETTINGS.Users.size(); i++)
     {
-	    //cout<< "Compare: " + user.name + " to " + username << endl;
-	    //cout<< "Compare: " + user.pass + " to " + password << endl;
+	    //cout<< "Compare: " + SETTINGS.Users[i].name + " to " +  SETTINGS.lastUser.name << endl;
+	    //cout<< "Compare: " + SETTINGS.Users[i].pass + " to " +  SETTINGS.lastUser.pass << endl;
         if(SETTINGS.Users[i].name == SETTINGS.lastUser.name && SETTINGS.Users[i].pass == SETTINGS.lastUser.pass)
         {
+            //cout << "==> Saved with success!\n" << endl;
             SETTINGS.Users[i] = SETTINGS.lastUser;            
-            break;
+            SETTINGS_Save();
+            return true;
         }
     }
 
-    ofstream file("settings.json");
-    if (!file)
-    {
-        cerr << "Erro ao abrir o arquivo settings.json para escrita" << endl;
-        return false;
-    }
-
-    file << SETTINGS.toJson().dump(4);
-    file.close();
-
-    return true;
+    cout << "\n ***Not save!\n" << endl;
+    return false;
 }
 
 bool USER_Add()
 {
+    cout << "\n====== User Add ======\n\n";
     User user;
     char opc = 'Y';
     cout << "Insert your name (Ex.: Zeh Linguiça): ";
@@ -207,6 +352,9 @@ bool USER_Add()
     cin >> user.pass;
 
     cout << "==> New user created!!" << endl;
+    SETTINGS.Users.push_back(user);
+    SETTINGS.lastUser = user;
+    USER_Save();
 
     while (opc == 'Y' || opc == 'y')
     {
@@ -215,7 +363,8 @@ bool USER_Add()
 
         if (opc == 'Y' || opc == 'y')
         {
-            EVENT_Create(user);
+            EVENT_Create(SETTINGS.lastUser);
+            USER_Save();
         }
         else if (opc == 'N' || opc == 'n')
         {
@@ -223,32 +372,12 @@ bool USER_Add()
         }
     }
 
-    SETTINGS.Users.push_back(user);
-    USER_Save();
+    cout << "==> You are logged!" << endl;
+	logged();
     return true;
 }
 
 /*****************************************************************************************************************************/
-
-void Header(bool isLogged)
-{
-    // - Tela não logado
-    //      - Cadastrar
-    //      - Logar
-    //      - Deletar user
-
-    // - Tela logado
-    //      - Adicionar Evento
-    //      - Deletar Evento
-    //      - Ver Eventos
-    //      - Deslogar
-
-    if (isLogged)
-    {
-        // Implementação da interface quando o usuário está logado
-    }
-}
-
 /*
  * EVENTS FUNCTIONS
  */
@@ -299,9 +428,25 @@ string EVENT_GetRepStr(event_repetions eventRep)
     }
 }
 
-void EVENT_PrintAll(User user)
+void EVENT_PrintAll(User& user)
 {
-    cout << "==== " << user.name << " ====" << endl;
+    char opc;
+    cout << "\n====== All events ======\n\n";
+    cout << "==== " << user.name << "' events ====" << endl;
+
+    if(user.events.size() == 0)
+    {
+        cout << "\n*** Not founded events! \n" << endl;
+        cout << "Do you like ad some?(Y/N): ";
+        cin >> opc;
+
+        if(opc == 'Y' || opc == 'y')
+        {
+            EVENT_Create(user);
+            return;
+        }
+    }
+
     for (const Event& event : user.events)
     {
         EVENT_Print(event);
@@ -312,26 +457,152 @@ void EVENT_Print(Event event)
 {
     cout << "==============================" << endl;
     cout << "Name: " << event.name << endl;
+    cout << "Note: " << event.note << endl;
     cout << "Date: " << DateTime(event.dateObj, format) << endl;
     cout << "Rep.: " << EVENT_GetRepStr(event.event_rep) << endl;
     cout << "==============================" << endl;
 }
 
+
+bool EVENT_isLeapYear(int year)
+{
+    if (year % 4 != 0) 
+    {
+        return false;
+    } 
+    else if (year % 100 != 0) 
+    {
+        return true;
+    } 
+    else if (year % 400 != 0) 
+    {
+        return false;
+    } 
+    else 
+    {
+        return true;
+    }
+}
+
+bool EVENT_IsHourValid(const std::string& timeStr)
+{
+    int hours, minutes;
+    if (timeStr.size() != 5 || timeStr[2] != ':')
+    {
+        return false;
+    }
+    
+    try 
+    {
+        hours = std::stoi(timeStr.substr(0, 2));
+        minutes = std::stoi(timeStr.substr(3, 2));
+    }
+    catch (std::exception& e)
+    {
+        return false;
+    }
+    
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59)
+    {
+        return false;
+    }
+    
+    return true;
+}
+
+bool EVENT_CheckDate(int year, int month, int day)
+{
+    int daysInMonth[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    
+    if (year < 1 || 
+        month < 1 ||
+        month > 12 ||
+        day < 1) 
+    {
+        return false;
+    }    
+    
+    if (month == 2 && EVENT_isLeapYear(year)) 
+    {
+        daysInMonth[1] = 29;
+    }
+    
+    if (day > daysInMonth[month - 1])
+    {
+        return false;
+    }
+    
+    return true;
+}
+
+bool EVENT_IsDateValid(const string dateStr)
+{
+    int year, month, day;
+    if (dateStr.size() != 10 || dateStr[4] != '/' || dateStr[7] != '/')
+    {
+        return false;
+    }
+    
+    try
+    {
+        year = stoi(dateStr.substr(0, 4));
+        month = stoi(dateStr.substr(5, 2));
+        day = stoi(dateStr.substr(8, 2));
+
+        return EVENT_CheckDate(year, month, day);
+    } 
+    catch (exception& e) 
+    {
+        cout << e.what() << endl;
+        return false;
+    }
+    
+    return true;
+}
+
+
 bool EVENT_Create(User& user)
 {
     char opc;
-    int opcEv;
+    int opcEv, year, month, day;
     Event event;
     string date, hour;
 
+    cout << "\n====== Create event ======\n\n";
     cout << "Insert event's name (Ex.: Dog's birthday): ";
-    cin >> event.name;
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    getline(cin, event.name);
+    do
+    {        
+        cout << "Insert event's date (Frmt.: yyyy/mm/dd | Ex.: 2023/05/15): ";
+        cin >> date;
 
-    cout << "Insert event's date (Ex.: 2024/05/19): ";
-    cin >> date;
+        if(EVENT_IsDateValid(date))
+        {
+            break;
+        }
+        else
+        {
+            printf("\n*** Date not valid!\n");
+        }
+    } 
+    while (true);
 
-    cout << "Insert event's hour (Ex.: 21:05:00): ";
-    cin >> hour;
+    do
+    {        
+        cout << "Insert event's hour (Frmt.: hh:mm | Ex.: 21:30): ";
+        cin >> hour;
+
+        if(EVENT_IsHourValid(hour))
+        {
+            break;
+        }
+        else
+        {
+            printf("\n*** Hour not valid!\n");
+        }
+    } 
+    while (true);
 
     cout << "This event repeats? (Y/N): ";
     cin >> opc;
@@ -356,7 +627,7 @@ bool EVENT_Create(User& user)
             event.event_rep = EVENT_REP_MONTHLY;
             break;
         default:
-            cout << "Invalid option! Setting not repeat for event." << endl;
+            cout << "\n*** Invalid option! Setting not repeat for event.\n" << endl;
             event.event_rep = EVENT_REP_NOT;
             break;
         }
@@ -366,8 +637,11 @@ bool EVENT_Create(User& user)
         event.event_rep = EVENT_REP_NOT;
     }
 
-    date.append(" ");
-    date.append(hour);
+    cout << "Insert note about event (Ex.: Event in my house): ";
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    getline(cin, event.note);
+
+    date.append(" " + hour + ":00");
     event.dateObj = parseDateTime(date, format);
 
     cout << "==> Event Added!" << endl;
@@ -381,9 +655,17 @@ bool EVENT_Create(User& user)
 bool EVENT_Delete(User& user)
 {
     int opc;
+    cout << "\n====== Delete event ======\n\n";
+
+    if(user.events.size() == 0)
+    {
+        cout << "\n*** Not founded events! \n" << endl;
+        return false;
+    }
+    
     for (size_t i = 0; i < user.events.size(); ++i)
     {
-        cout << i + 1 << ")" << endl;
+        cout << i + 1 << ") ";
         EVENT_Print(user.events[i]);
         cout << endl;
     }
@@ -393,7 +675,7 @@ bool EVENT_Delete(User& user)
 
     if (opc < 1 || opc > user.events.size())
     {
-        cout << "Invalid option!" << endl;
+        cout << "\n*** Invalid option!\n" << endl;
         return false;
     }
 
@@ -406,126 +688,35 @@ bool EVENT_Delete(User& user)
     return true;
 }
 
-/*USER FUNCTIONS**********************************/
-//USER NOT LOGGED
-void create_user(){
-	cout<<("==========================================\n");
-	cout<<("WHAT'S YOUR NAME: ");
-	cin>>(name);
-	cout<<("WHAT'S PASSW (4 DIG): ");
-	cin>>(pass);
-	cout<<("\n");
-	cout<<("==========================================\n");				
-	}
-	
-	
-void delete_user(){
-	cout<<("==========================================\n");
-	cout<<("=====  -------- D-E-L-E-T-E -------- =====\n");
-	cout<<("==========================================\n");
-	cout<<("=========  THIS FUNCTION WILL    =========\n");
-	cout<<("=========  DELETE ALL EVENTS...  =========\n");
-	cout<<("=========  ARE YOU SURE? Y/N  =========\n");
-	cout<<("==========================================\n");
-	cout<<("TYPE Y FOR YES AND N FOR NO:");
-	cin>>confirma;
-	
-}
-
-bool User_GetUser(User &getUser, string username, string password)
+void byebye()
 {
-    for (const auto& user : SETTINGS.Users)
-    {
-	    //cout<< "Compare: " + user.name + " to " + username << endl;
-	    //cout<< "Compare: " + user.pass + " to " + password << endl;
-        if(user.name == username && user.pass == password)
-        {
-            getUser = user;
-            return true;
-        }
-    }
-
-    return false;
-} 
-
-void login(){
-	cout<<("==========================================\n");
-	cout<<("WHAT'S YOUR NAME: ");
-	cin>>(name);
-	cout<<("WHAT'S PASSW (4 DIG): ");
-	cin>>(passw);
-	cout<<("\n");
-	cout<<("==========================================\n");
-
-    if(User_GetUser(SETTINGS.lastUser, name, passw))
-    {
-	    cout << "==> You are logged!" << endl;
-	    logged();
-    }
-    else
-    {
-	    cout << "==> Username or password incorrect!" << endl;
-    }
-}	
-
-//USER ACCOUNT
-
-//ESSA PARTE DEVE MOSTRAR TODOS AS TAREFAS ADICIONADAS NA LISTA
-void show_events(){
-
-}
-
-
-//ESSA PARTE DEVERA SER RESPONSAVEL POR ADICIONAR EVENTO 
-void add_events()
-{
-	cout<<("==========================================\n");
-	cout<<("EVENT NAME: ");
-	cin>>(name_event);
-	cout<<("\n");
-	cout<<("NOTES ABOUT EVENT:");
-	cin>>(event_anotation);
-	cout<<("\n");
-	cout<<("DATE: M/D/Y");
-	cin>>(month, day, year);
-	cout<<("==========================================\n");				
-}
-
-//ESSA PARTE DEVERA SER RESPONSAVEL POR DELETAR EVENTO 
-void delete_events()
-{
-	cout<<("==========================================\n");
-	cout<<("EVENT NAME: ");
-	cin>>(name_event);
-	cout<<("\n");
-}
-
-//ESSA PARTE DEVERA SER RESPONSAVEL POR DESCONECTAR-SE DA AGENDA 
-void byebye(){
 	printf("==> SEE YOU LATER ...\n");
+    exit(1);
 }
-
 
 void logged()
 {
     bool disconnect = false;
+    isLogged = true;
+    int opc;
 
     while(!disconnect)
     {
         cout<<("==========================================\n");
-        cout<<("=====    Y-O-U-R--ARE--L-O-G-G-E-D   =====\n");
+        cout<<("===== Welcome " + SETTINGS.lastUser.name +" to your notepad!\n");
         cout<<("==========================================\n");
-        cout<<("=========  1 - SHOW EVENTS:      =========\n");
-        cout<<("=========  2 - ADD EVENTS:       =========\n");
-        cout<<("=========  3 - DELETE EVENTS:    =========\n");
-        cout<<("==========================================\n");
-        cout<<("=========  4 - DISCONNECT:       =========\n");
+        cout<<("=========  1 - See all events    =========\n");
+        cout<<("=========  2 - Add event         =========\n");
+        cout<<("=========  3 - Delete a event    =========\n");
+        cout<<("=========  4 - Logout            =========\n");
         cout<<("==========================================\n");
         cout<<("\n");
-        cout<<(" WHAT'S YOUR CHOICE:");
-        cin>>(login_resp);
+        cout<<("Do you like to do?(Ex.: 2):");
+        cin>>(opc);
 
-        switch(login_resp){
+        SETTINGS_ClearScreen();
+
+        switch(opc){
         case 1:
             //show_events();
             EVENT_PrintAll(SETTINGS.lastUser);
@@ -540,6 +731,7 @@ void logged()
             break;
         case 4:
             byebye();
+            isLogged = false;
             disconnect = true;
             break;
         }
@@ -549,43 +741,81 @@ void logged()
 void notLogged()
 {
     bool close = false;
+    int opc;
 
     while(!close)
     {
         cout<<("==========================================\n");
-        cout<<("=====    Y-O-U-R--NOT--L-O-G-G-E-D   =====\n");
+        cout<<("=====    Welcome to MyEvents 2.0 1!  =====\n");
         cout<<("==========================================\n");
-        cout<<("=========   1 - CREATE USER:     =========\n");
-        cout<<("=========   2 - DELETE USER:     =========\n");
-        cout<<("=========   3 - LOGIN:           =========\n");
-        cout<<("=========   4 - EXIT:           =========\n");
+        cout<<("=========   1 - Create user -    =========\n");
+        cout<<("=========   2 - Remove user -    =========\n");
+        cout<<("=========   3 -   Login     -    =========\n");
+        cout<<("=========   4 -   Exit:     -    =========\n");
         cout<<("==========================================\n");
         cout<<("\n");
-        cout<<(" WHAT'S YOUR CHOICE:");
-        cin>>(resp);
+        cout<<("Do you like today?(Ex. 1):");
+        cin>>(opc);
         
-        switch(resp){
-        case 1:
-            //create_user();
-            USER_Add();
-            break;
-        case 2:
-            delete_user();
-            break;
-        case 3: 
-            login();
-            break;
-        case 4:
-            byebye();
-            close = true;
-            break;
+        SETTINGS_ClearScreen();
+        switch(opc)
+        {
+            case 1:
+                //create_user();
+                USER_Add();
+                break;
+            case 2:
+                USER_Delete();
+                break;
+            case 3: 
+                USER_Login();
+                break;
+            case 4:
+                byebye();
+                close = true;
+                break;
         }
     }
+}
+void signalHandler(int signum)
+{
+    std::cout << "\nISR (Ctrl+C). Function Exit..." << std::endl;
+
+    // if(isLogged)
+    // {
+    //     cout<<("==========================================\n");
+    //     cout<<("===== Welcome " + SETTINGS.lastUser.name +" to your notepad!\n");
+    //     cout<<("==========================================\n");
+    //     cout<<("=========  1 - See all events    =========\n");
+    //     cout<<("=========  2 - Add event         =========\n");
+    //     cout<<("=========  3 - Delete a event    =========\n");
+    //     cout<<("=========  4 - Logout            =========\n");
+    //     cout<<("==========================================\n");
+    //     cout<<("\n");
+    //     cout<<("Do you like to do?(Ex.: 2):");
+    // }
+    // else
+    // {
+    //     cout<<("==========================================\n");
+    //     cout<<("=====    Welcome to MyEvents 2.0 1!  =====\n");
+    //     cout<<("==========================================\n");
+    //     cout<<("=========   1 - Create user -    =========\n");
+    //     cout<<("=========   2 - Remove user -    =========\n");
+    //     cout<<("=========   3 -   Login     -    =========\n");
+    //     cout<<("=========   4 -   Exit:     -    =========\n");
+    //     cout<<("==========================================\n");
+    //     cout<<("\n");
+    //     cout<<("Do you like today?(Ex. 1):");
+    // }
+
+    exit(1);
 }
 /*****************************************************************************************************************************/
 int main()
 {
-    USER_LoadAll();
+    signal(SIGINT, signalHandler);
+
+    SETTINGS_LoadUsersAll();
 
     notLogged();
 
